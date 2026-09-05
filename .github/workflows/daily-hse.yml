@@ -21,12 +21,22 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install dependencies
+      - name: Install Python packages
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Create HSE video
+      - name: Check Pexels API key
+        env:
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+        run: |
+          if [ -z "$PEXELS_API_KEY" ]; then
+            echo "PEXELS_API_KEY is missing"
+            exit 1
+          fi
+          echo "Pexels API key detected"
+
+      - name: Create HSE source video
         env:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         run: |
@@ -34,8 +44,10 @@ jobs:
 
       - name: Check generated video
         run: |
+          echo "Checking generated files..."
           ls -lah assets/
           test -f assets/hse_source.mp4
+          echo "HSE video file exists"
 
       - name: Save HSE source video
         uses: actions/upload-artifact@v4
