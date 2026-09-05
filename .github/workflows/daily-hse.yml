@@ -20,4 +20,6 @@ jobs:
           python-version: "3.13"
 
       - name: Run HSE generator
+        env:
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         run: python hse_generator.py
