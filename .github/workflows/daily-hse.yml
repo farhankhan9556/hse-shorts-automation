@@ -1,0 +1,26 @@
+name: Daily HSE Short
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 8 * * *"
+      timezone: "Asia/Dubai"
+
+jobs:
+  create-hse-short:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Start automation
+        run: |
+          echo "================================="
+          echo "HSE SHORT AUTOMATION STARTED"
+          echo "================================="
+          echo "Today's HSE Short will be created here."
+          echo "Topic engine: READY"
+          echo "Video engine: NEXT"
+          echo "YouTube upload: NEXT"
+
+      - name: Show date
+        run: |
+          date
