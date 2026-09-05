@@ -19,6 +19,9 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
       - name: Run HSE generator
         env:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
