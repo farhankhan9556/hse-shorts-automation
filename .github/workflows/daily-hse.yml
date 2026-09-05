@@ -18,106 +18,63 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
 
-
       - name: Install FFmpeg
         run: |
-
           sudo apt-get update
-
           sudo apt-get install -y ffmpeg
-
 
       - name: Check FFmpeg
         run: |
-
           ffmpeg -version
-
 
       - name: Install Python packages
         run: |
-
           python -m pip install --upgrade pip
-
           pip install -r requirements.txt
-
 
       - name: Check Pexels API key
         env:
-
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-
         run: |
-
           if [ -z "$PEXELS_API_KEY" ]; then
-
             echo "PEXELS_API_KEY is missing"
-
             exit 1
-
           fi
-
           echo "Pexels API key detected"
-
 
       - name: Create 3 HSE Shorts
         env:
-
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-
         run: |
-
           python hse_generator.py
-
 
       - name: Check generated Shorts
         run: |
-
           ls -lah assets/
-
           test -f assets/hse_short_1.mp4
-
           test -f assets/hse_short_2.mp4
-
           test -f assets/hse_short_3.mp4
-
 
       - name: Save 3 HSE Shorts
         uses: actions/upload-artifact@v4
-
         with:
-
           name: hse-shorts-3
-
           path: |
-
             assets/hse_short_1.mp4
-
             assets/hse_short_2.mp4
-
             assets/hse_short_3.mp4
-
             assets/youtube_title_1.txt
-
             assets/youtube_title_2.txt
-
             assets/youtube_title_3.txt
-
             assets/youtube_description_1.txt
-
             assets/youtube_description_2.txt
-
             assets/youtube_description_3.txt
-
             assets/youtube_hashtags_1.txt
-
             assets/youtube_hashtags_2.txt
-
             assets/youtube_hashtags_3.txt
-
           retention-days: 7
