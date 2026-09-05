@@ -1,24 +1,3 @@
-name: Daily HSE Short
-
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: "15 8 * * *"
-      timezone: "Asia/Dubai"
-
-jobs:
-  create-hse-short:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Get project files
-        uses: actions/checkout@v6
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-
       - name: Install dependencies
         run: pip install -r requirements.txt
 
@@ -26,3 +5,10 @@ jobs:
         env:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         run: python hse_generator.py
+
+      - name: Save downloaded video
+        uses: actions/upload-artifact@v4
+        with:
+          name: hse-source-video
+          path: assets/hse_source.mp4
+          retention-days: 1
