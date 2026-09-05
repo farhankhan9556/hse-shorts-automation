@@ -7,10 +7,6 @@ import math
 from pathlib import Path
 from datetime import date
 
-# ============================================================
-# SETTINGS
-# ============================================================
-
 API_KEY = os.environ.get("PEXELS_API_KEY")
 
 if not API_KEY:
@@ -19,21 +15,7 @@ if not API_KEY:
 OUT = Path("assets")
 OUT.mkdir(parents=True, exist_ok=True)
 
-SOURCE = OUT / "source.mp4"
-VOICE = OUT / "voice.mp3"
-MUSIC = OUT / "music.wav"
-FINAL = OUT / "hse_short.mp4"
-ASS = OUT / "captions.ass"
-
-TITLE_FILE = OUT / "youtube_title.txt"
-DESC_FILE = OUT / "youtube_description.txt"
-TAGS_FILE = OUT / "youtube_hashtags.txt"
-
 TODAY = date.today()
-
-# ============================================================
-# DAILY HSE TOPICS
-# ============================================================
 
 topics = [
     {
@@ -110,241 +92,274 @@ topics = [
     }
 ]
 
-# Deterministic daily topic
-topic = topics[(TODAY.toordinal()) % len(topics)]
+# Choose 3 different topics each day
+start_index = TODAY.toordinal() % len(topics)
 
-print("================================")
-print("TODAY'S HSE TOPIC")
-print(topic["title"])
-print("================================")
-
-# ============================================================
-# SEARCH PEXELS
-# ============================================================
+selected_topics = [
+    topics[start_index % len(topics)],
+    topics[(start_index + 1) % len(topics)],
+    topics[(start_index + 2) % len(topics)]
+]
 
 headers = {
     "Authorization": API_KEY
 }
 
-response = requests.get(
-    "https://api.pexels.com/v1/videos/search",
-    headers=headers,
-    params={
-        "query": topic["search"],
-        "orientation": "portrait",
-        "size": "medium",
-        "per_page": 20
-    },
-    timeout=30
-)
 
-response.raise_for_status()
+def create_music(path):
+    sample_rate = 44100
+    duration = 15
+    samples = sample_rate * duration
 
-videos = response.json().get("videos", [])
+    with wave.open(str(path), "w") as wav:
+        wav.setnchannels(2)
+        wav.setsampwidth(2)
+        wav.setframerate(sample_rate)
 
-if not videos:
-    raise RuntimeError("No Pexels video found")
+        for i in range(samples):
+            t = i / sample_rate
 
-video = random.choice(videos)
+            notes = [220.00, 277.18, 329.63, 440.00]
 
-files = video.get("video_files", [])
+            chord = 0
 
-portrait = [
-    f for f in files
-    if f.get("width", 0) > 0
-    and f.get("height", 0) > 0
-    and f["height"] >= f["width"]
-]
+            for note in notes:
+                chord += math.sin(2 * math.pi * note * t)
 
-if portrait:
-    files = portrait
+            value = int((chord / len(notes)) * 900)
 
-files.sort(
-    key=lambda f: f.get("width", 0) * f.get("height", 0),
-    reverse=True
-)
+            if t < 1:
+                value = int(value * t)
 
-video_url = files[0]["link"]
+            if t > 13.5:
+                value = int(value * (15 - t) / 1.5)
 
-print("Downloading Pexels footage...")
+            value = max(-32767, min(32767, value))
 
-with requests.get(
-    video_url,
-    stream=True,
-    timeout=120
-) as r:
+            wav.writeframes(
+                value.to_bytes(2, "little", signed=True) +
+                value.to_bytes(2, "little", signed=True)
+            )
 
-    r.raise_for_status()
 
-    with open(SOURCE, "wb") as f:
-        for chunk in r.iter_content(1024 * 1024):
-            if chunk:
-                f.write(chunk)
+def timestamp(seconds):
+    h = int(seconds // 3600)
+    m = int((seconds % 3600) // 60)
+    s = int(seconds % 60)
+    ms = int((seconds - int(seconds)) * 1000)
 
-print("Source video downloaded")
+    return f"{h:02}:{m:02}:{s:02},{ms:03}"
 
-# ============================================================
-# CREATE NATURAL VOICE
-# ============================================================
-
-print("Creating voice...")
-
-subprocess.run(
-    [
-        "edge-tts",
-        "--voice",
-        "en-US-GuyNeural",
-        "--text",
-        topic["script"],
-        "--write-media",
-        str(VOICE)
-    ],
-    check=True
-)
-
-print("Voice created")
-
-# ============================================================
-# CREATE SIMPLE CORPORATE BACKGROUND MUSIC
-# ============================================================
-
-print("Creating background music...")
-
-sample_rate = 44100
-duration = 15
-samples = sample_rate * duration
-
-with wave.open(str(MUSIC), "w") as wav:
-    wav.setnchannels(2)
-    wav.setsampwidth(2)
-    wav.setframerate(sample_rate)
-
-    for i in range(samples):
-        t = i / sample_rate
-
-        # Soft ambient/corporate chord movement
-        notes = [
-            220.00,
-            277.18,
-            329.63,
-            440.00
-        ]
-
-        chord = 0
-
-        for n in notes:
-            chord += math.sin(2 * math.pi * n * t)
-
-        # Very low background level
-        value = int((chord / len(notes)) * 900)
-
-        # Fade in/out
-        if t < 1:
-            value = int(value * t)
-
-        if t > 13.5:
-            value = int(value * (15 - t) / 1.5)
-
-        value = max(-32767, min(32767, value))
-
-        wav.writeframes(
-            value.to_bytes(2, byteorder="little", signed=True) +
-            value.to_bytes(2, byteorder="little", signed=True)
-        )
-
-print("Background music created")
-
-# ============================================================
-# CREATE ANIMATED ASS CAPTIONS
-# ============================================================
-
-print("Creating animated captions...")
-
-words = topic["script"].split()
-
-groups = []
-
-for i in range(0, len(words), 5):
-    groups.append(" ".join(words[i:i + 5]))
-
-total_time = 14.5
-part = total_time / len(groups)
 
 def ass_time(seconds):
     h = int(seconds // 3600)
     m = int((seconds % 3600) // 60)
     s = int(seconds % 60)
     cs = int((seconds - int(seconds)) * 100)
+
     return f"{h}:{m:02}:{s:02}.{cs:02}"
 
-with open(ASS, "w", encoding="utf-8") as f:
 
-    f.write("[Script Info]\n")
-    f.write("ScriptType: v4.00+\n")
-    f.write("PlayResX: 1080\n")
-    f.write("PlayResY: 1920\n\n")
+def download_video(topic, number):
 
-    f.write("[V4+ Styles]\n")
-    f.write(
-        "Format: Name, Fontname, Fontsize, PrimaryColour, "
-        "SecondaryColour, OutlineColour, BackColour, Bold, Italic, "
-        "Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, "
-        "BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
+    print(f"\nSearching Pexels for Short {number}: {topic['search']}")
+
+    response = requests.get(
+        "https://api.pexels.com/v1/videos/search",
+        headers=headers,
+        params={
+            "query": topic["search"],
+            "orientation": "portrait",
+            "size": "medium",
+            "per_page": 20
+        },
+        timeout=30
     )
 
-    f.write(
-        "Style: Caption,DejaVu Sans,48,&H00FFFFFF,&H00FFFFFF,"
-        "&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,1,2,80,80,300,1\n"
-    )
+    response.raise_for_status()
 
-    f.write(
-        "Style: Hook,DejaVu Sans,68,&H0000FFFF,&H0000FFFF,"
-        "&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,2,8,60,60,120,1\n"
-    )
+    videos = response.json().get("videos", [])
 
-    f.write("\n[Events]\n")
-    f.write(
-        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, "
-        "MarginV, Effect, Text\n"
-    )
-
-    # Top hook
-    f.write(
-        f"Dialogue: 0,0:00:00.00,0:00:03.00,Hook,,0,0,0,,"
-        f"{{\\fad(300,300)}}{topic['title']}\n"
-    )
-
-    # Animated captions
-    for i, text in enumerate(groups):
-
-        start = i * part
-        end = min((i + 1) * part, total_time)
-
-        f.write(
-            f"Dialogue: 0,{ass_time(start)},{ass_time(end)},Caption,,0,0,0,,"
-            f"{{\\fad(180,180)\\t(0,180,\\fscx105\\fscy105)\\t(180,360,\\fscx100\\fscy100)}}"
-            f"{text.upper()}\n"
+    if not videos:
+        raise RuntimeError(
+            f"No Pexels video found for: {topic['search']}"
         )
 
-print("Captions created")
+    video = random.choice(videos)
 
-# ============================================================
-# YOUTUBE METADATA
-# ============================================================
+    files = video.get("video_files", [])
 
-photographer = video.get("user", {}).get("name", "Pexels contributor")
-pexels_page = video.get("url", "https://www.pexels.com/")
+    portrait = [
+        f for f in files
+        if f.get("width", 0) > 0
+        and f.get("height", 0) > 0
+        and f["height"] >= f["width"]
+    ]
 
-youtube_title = f"{topic['title']} | HSE Safety Short"
+    if portrait:
+        files = portrait
 
-youtube_description = f"""⚠️ HSE SAFETY SHORT
+    files.sort(
+        key=lambda f: f.get("width", 0) * f.get("height", 0),
+        reverse=True
+    )
+
+    video_url = files[0]["link"]
+
+    source = OUT / f"source_{number}.mp4"
+
+    print(f"Downloading video {number}...")
+
+    with requests.get(
+        video_url,
+        stream=True,
+        timeout=120
+    ) as r:
+
+        r.raise_for_status()
+
+        with open(source, "wb") as f:
+            for chunk in r.iter_content(1024 * 1024):
+
+                if chunk:
+                    f.write(chunk)
+
+    return source, video
+
+
+def create_short(topic, number):
+
+    print(f"\n========== SHORT {number} ==========")
+    print(topic["title"])
+
+    source, video = download_video(topic, number)
+
+    voice = OUT / f"voice_{number}.mp3"
+    music = OUT / f"music_{number}.wav"
+    ass = OUT / f"captions_{number}.ass"
+    final = OUT / f"hse_short_{number}.mp4"
+
+    title_file = OUT / f"youtube_title_{number}.txt"
+    description_file = OUT / f"youtube_description_{number}.txt"
+    hashtags_file = OUT / f"youtube_hashtags_{number}.txt"
+
+    # Voice
+    print("Creating voice...")
+
+    subprocess.run(
+        [
+            "edge-tts",
+            "--voice",
+            "en-US-GuyNeural",
+            "--text",
+            topic["script"],
+            "--write-media",
+            str(voice)
+        ],
+        check=True
+    )
+
+    # Music
+    print("Creating background music...")
+
+    create_music(music)
+
+    # Captions
+    words = topic["script"].split()
+
+    groups = [
+        " ".join(words[i:i + 5])
+        for i in range(0, len(words), 5)
+    ]
+
+    total_time = 14.5
+    part = total_time / len(groups)
+
+    with open(ass, "w", encoding="utf-8") as f:
+
+        f.write(
+            "[Script Info]\n"
+            "ScriptType: v4.00+\n"
+            "PlayResX: 1080\n"
+            "PlayResY: 1920\n\n"
+        )
+
+        f.write("[V4+ Styles]\n")
+
+        f.write(
+            "Format: Name, Fontname, Fontsize, PrimaryColour, "
+            "SecondaryColour, OutlineColour, BackColour, Bold, Italic, "
+            "Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, "
+            "BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, "
+            "MarginV, Encoding\n"
+        )
+
+        f.write(
+            "Style: Caption,DejaVu Sans,48,"
+            "&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,"
+            "-1,0,0,0,100,100,0,0,1,3,1,2,80,80,300,1\n"
+        )
+
+        f.write(
+            "Style: Hook,DejaVu Sans,68,"
+            "&H0000FFFF,&H0000FFFF,&H00000000,&H80000000,"
+            "-1,0,0,0,100,100,0,0,1,4,2,8,60,60,120,1\n"
+        )
+
+        f.write("\n[Events]\n")
+
+        f.write(
+            "Format: Layer, Start, End, Style, Name, "
+            "MarginL, MarginR, MarginV, Effect, Text\n"
+        )
+
+        # Hook
+        f.write(
+            f"Dialogue: 0,0:00:00.00,0:00:03.00,Hook,,"
+            f"0,0,0,,{{\\fad(300,300)}}{topic['title']}\n"
+        )
+
+        # Captions
+        for i, text in enumerate(groups):
+
+            start = i * part
+            end = min((i + 1) * part, total_time)
+
+            f.write(
+                f"Dialogue: 0,{ass_time(start)},{ass_time(end)},"
+                f"Caption,,0,0,0,,"
+                f"{{\\fad(180,180)"
+                f"\\t(0,180,\\fscx105\\fscy105)"
+                f"\\t(180,360,\\fscx100\\fscy100)}}"
+                f"{text.upper()}\n"
+            )
+
+    # Metadata
+    photographer = video.get(
+        "user", {}
+    ).get(
+        "name",
+        "Pexels contributor"
+    )
+
+    pexels_page = video.get(
+        "url",
+        "https://www.pexels.com/"
+    )
+
+    youtube_title = (
+        f"{topic['title']} | HSE Safety Short"
+    )
+
+    youtube_description = f"""⚠️ HSE SAFETY SHORT
 
 {topic["script"]}
 
 Stay alert. Follow the procedure. Go home safe.
 
 📌 Safety Reminder:
-Always follow your company's approved procedures, risk assessments and safety requirements.
+Always follow your company's approved procedures,
+risk assessments and safety requirements.
 
 🎥 Footage:
 Video by {photographer} from Pexels
@@ -358,79 +373,124 @@ https://www.pexels.com/
 #Shorts #HSE #Safety
 """
 
-with open(TITLE_FILE, "w", encoding="utf-8") as f:
-    f.write(youtube_title)
+    title_file.write_text(
+        youtube_title,
+        encoding="utf-8"
+    )
 
-with open(DESC_FILE, "w", encoding="utf-8") as f:
-    f.write(youtube_description)
+    description_file.write_text(
+        youtube_description,
+        encoding="utf-8"
+    )
 
-with open(TAGS_FILE, "w", encoding="utf-8") as f:
-    f.write(topic["hashtags"])
+    hashtags_file.write_text(
+        topic["hashtags"],
+        encoding="utf-8"
+    )
 
-print("YouTube metadata created")
+    # Final video
+    print("Rendering final Short...")
 
-# ============================================================
-# FINAL 1080x1920 VIDEO
-# ============================================================
+    filter_complex = (
+        "[0:v]"
+        "scale=1080:1920:"
+        "force_original_aspect_ratio=increase,"
+        "crop=1080:1920,"
+        "setsar=1,"
+        f"subtitles=assets/captions_{number}.ass"
+        "[v];"
 
-print("Rendering final HSE Short...")
+        "[1:a]volume=1.0[voice];"
 
-filter_complex = (
-    "[0:v]"
-    "scale=1080:1920:force_original_aspect_ratio=increase,"
-    "crop=1080:1920,"
-    "setsar=1,"
-    "subtitles=assets/captions.ass"
-    "[v];"
-    "[1:a]volume=1.0[voice];"
-    "[2:a]volume=0.12[music];"
-    "[voice][music]amix=inputs=2:duration=first:dropout_transition=2[a]"
-)
+        "[2:a]volume=0.12[music];"
 
-subprocess.run(
-    [
-        "ffmpeg",
-        "-y",
-        "-i",
-        str(SOURCE),
-        "-i",
-        str(VOICE),
-        "-i",
-        str(MUSIC),
-        "-filter_complex",
-        filter_complex,
-        "-map",
-        "[v]",
-        "-map",
-        "[a]",
-        "-t",
-        "15",
-        "-r",
-        "30",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-crf",
-        "23",
-        "-pix_fmt",
-        "yuv420p",
-        "-c:a",
-        "aac",
-        "-b:a",
-        "160k",
-        "-movflags",
-        "+faststart",
-        str(FINAL)
-    ],
-    check=True
-)
+        "[voice][music]"
+        "amix=inputs=2:"
+        "duration=first:"
+        "dropout_transition=2"
+        "[a]"
+    )
 
-print("================================")
-print("HSE SHORT CREATED SUCCESSFULLY")
-print("================================")
-print(f"Video: {FINAL}")
-print(f"Title: {TITLE_FILE}")
-print(f"Description: {DESC_FILE}")
-print(f"Hashtags: {TAGS_FILE}")
-print("================================")
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+
+            "-i",
+            str(source),
+
+            "-i",
+            str(voice),
+
+            "-i",
+            str(music),
+
+            "-filter_complex",
+            filter_complex,
+
+            "-map",
+            "[v]",
+
+            "-map",
+            "[a]",
+
+            "-t",
+            "15",
+
+            "-r",
+            "30",
+
+            "-c:v",
+            "libx264",
+
+            "-preset",
+            "veryfast",
+
+            "-crf",
+            "23",
+
+            "-pix_fmt",
+            "yuv420p",
+
+            "-c:a",
+            "aac",
+
+            "-b:a",
+            "160k",
+
+            "-movflags",
+            "+faststart",
+
+            str(final)
+        ],
+        check=True
+    )
+
+    print(f"✅ Short {number} completed:")
+    print(final)
+
+    return final
+
+
+# Create 3 Shorts
+for number, topic in enumerate(selected_topics, start=1):
+
+    create_short(topic, number)
+
+
+print("\n===================================")
+print("🎉 3 HSE SHORTS CREATED SUCCESSFULLY")
+print("===================================")
+
+for number in range(1, 4):
+
+    final = OUT / f"hse_short_{number}.mp4"
+
+    if final.exists():
+
+        size_mb = final.stat().st_size / (1024 * 1024)
+
+        print(
+            f"Short {number}: "
+            f"{size_mb:.2f} MB"
+        )
