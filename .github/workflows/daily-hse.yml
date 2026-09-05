@@ -43,7 +43,6 @@ jobs:
             echo "PEXELS_API_KEY is missing"
             exit 1
           fi
-          echo "Pexels API key detected"
 
       - name: Create HSE Short
         env:
@@ -51,16 +50,21 @@ jobs:
         run: |
           python hse_generator.py
 
-      - name: Check final video
+      - name: Check generated files
         run: |
-          echo "Checking generated files..."
           ls -lah assets/
           test -f assets/hse_short.mp4
-          echo "Final HSE Short exists"
+          test -f assets/youtube_title.txt
+          test -f assets/youtube_description.txt
+          test -f assets/youtube_hashtags.txt
 
-      - name: Save final HSE Short
+      - name: Save HSE Short and metadata
         uses: actions/upload-artifact@v4
         with:
           name: hse-short
-          path: assets/hse_short.mp4
-          retention-days: 3
+          path: |
+            assets/hse_short.mp4
+            assets/youtube_title.txt
+            assets/youtube_description.txt
+            assets/youtube_hashtags.txt
+          retention-days: 7
