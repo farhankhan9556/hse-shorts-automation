@@ -11,16 +11,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Start automation
-        run: |
-          echo "================================="
-          echo "HSE SHORT AUTOMATION STARTED"
-          echo "================================="
-          echo "Today's HSE Short will be created here."
-          echo "Topic engine: READY"
-          echo "Video engine: NEXT"
-          echo "YouTube upload: NEXT"
+      - name: Get project files
+        uses: actions/checkout@v6
 
-      - name: Show date
-        run: |
-          date
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Run HSE generator
+        run: python hse_generator.py
